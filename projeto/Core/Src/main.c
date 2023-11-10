@@ -54,6 +54,8 @@ const osThreadAttr_t defaultTask_attributes = {
 };
 /* USER CODE BEGIN PV */
 
+int toggle = 1;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -102,12 +104,8 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  /*
-  HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_4);
-  */
+  TIM3->CCR2 = 80;
+
 
   /* USER CODE END 2 */
 
@@ -276,21 +274,27 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(Led_GPIO_Port, Led_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : Led_Pin */
+  GPIO_InitStruct.Pin = Led_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(Led_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : Key_Pin */
   GPIO_InitStruct.Pin = Key_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(Key_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA11 PA12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+  /*Configure GPIO pin : test_Pin */
+  GPIO_InitStruct.Pin = test_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(test_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -299,13 +303,13 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 void RightMotorForward(){
-	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_2);
+	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
+	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_1);
 }
 
 void RightMotorBackward(){
-	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
+	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_2);
 }
 
 void RightMotorStop(){
@@ -348,7 +352,33 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  RightMotorForward();
+	  HAL_Delay(1000);
+	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  RightMotorStop();
+	  osDelay(1000);
+
+
+		/*
+		if(toggle>0){
+			HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
+			HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_2);
+
+			HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_3);
+			HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_4);
+		}
+		if(toggle<0){
+			HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
+			HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_1);
+
+			HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_4);
+			HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_3);
+		}*/
+
+
+    //osDelay(100);
+
   }
   /* USER CODE END 5 */
 }
