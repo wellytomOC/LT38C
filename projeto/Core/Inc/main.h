@@ -65,6 +65,12 @@ void Error_Handler(void);
 #define Key_GPIO_Port GPIOA
 #define test_Pin GPIO_PIN_1
 #define test_GPIO_Port GPIOA
+#define Encoder_Direito_Pin GPIO_PIN_3
+#define Encoder_Direito_GPIO_Port GPIOA
+#define Encoder_Direito_EXTI_IRQn EXTI3_IRQn
+#define Encoder_Esquerdo_Pin GPIO_PIN_4
+#define Encoder_Esquerdo_GPIO_Port GPIOA
+#define Encoder_Esquerdo_EXTI_IRQn EXTI4_IRQn
 
 /* USER CODE BEGIN Private defines */
 

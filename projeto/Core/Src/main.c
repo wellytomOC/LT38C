@@ -104,8 +104,10 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  TIM3->CCR2 = 80;
-
+  TIM3->CCR2 = 20;
+  TIM3->CCR1 = 20;
+  TIM3->CCR3 = 20;
+  TIM3->CCR4 = 20;
 
   /* USER CODE END 2 */
 
@@ -296,6 +298,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(test_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : Encoder_Direito_Pin Encoder_Esquerdo_Pin */
+  GPIO_InitStruct.Pin = Encoder_Direito_Pin|Encoder_Esquerdo_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
@@ -334,9 +349,15 @@ void LeftMotorStop(){
 
 
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 
+	if(GPIO_Pin == GPIO_PIN_3){
+		 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+		}
+	if(GPIO_Pin == GPIO_PIN_4){
+		}
 
-
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -352,12 +373,15 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  LeftMotorForward();
 	  RightMotorForward();
 	  HAL_Delay(1000);
-	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 	  RightMotorStop();
+	  LeftMotorStop();
 	  osDelay(1000);
+
 
 
 		/*
