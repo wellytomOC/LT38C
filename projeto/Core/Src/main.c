@@ -23,6 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include <stdbool.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,7 +45,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -52,17 +54,37 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for RightMotor */
+osThreadId_t RightMotorHandle;
+const osThreadAttr_t RightMotor_attributes = {
+  .name = "RightMotor",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for LeftMotor */
+osThreadId_t LeftMotorHandle;
+const osThreadAttr_t LeftMotor_attributes = {
+  .name = "LeftMotor",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE BEGIN PV */
 
-int toggle = 1;
+int LeftEncoderCount=0;
+int RightEncoderCount =0;
+
+bool Flag_RightMoveFoward=false;
+bool Flag_LeftMoveFoward=false;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_TIM3_Init(void);
+static void MX_TIM4_Init(void);
 void StartDefaultTask(void *argument);
+void StartRightMotor(void *argument);
+void StartLeftMotor(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -101,13 +123,11 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_TIM3_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
-  TIM3->CCR2 = 20;
-  TIM3->CCR1 = 20;
-  TIM3->CCR3 = 20;
-  TIM3->CCR4 = 20;
+  RightMotorSpeed(30);
+  LeftMotorSpeed(30);
 
   /* USER CODE END 2 */
 
@@ -133,6 +153,12 @@ int main(void)
   /* Create the thread(s) */
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* creation of RightMotor */
+  RightMotorHandle = osThreadNew(StartRightMotor, NULL, &RightMotor_attributes);
+
+  /* creation of LeftMotor */
+  LeftMotorHandle = osThreadNew(StartLeftMotor, NULL, &LeftMotor_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -198,64 +224,63 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief TIM3 Initialization Function
+  * @brief TIM4 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM3_Init(void)
+static void MX_TIM4_Init(void)
 {
 
-  /* USER CODE BEGIN TIM3_Init 0 */
+  /* USER CODE BEGIN TIM4_Init 0 */
 
-  /* USER CODE END TIM3_Init 0 */
+  /* USER CODE END TIM4_Init 0 */
 
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
 
-  /* USER CODE BEGIN TIM3_Init 1 */
+  /* USER CODE BEGIN TIM4_Init 1 */
 
-  /* USER CODE END TIM3_Init 1 */
-  htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 250;
-  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 100;
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 250;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 100-1;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
   {
     Error_Handler();
   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 50;
+  sConfigOC.Pulse = 50-1;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.Pulse = 0;
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM3_Init 2 */
+  /* USER CODE BEGIN TIM4_Init 2 */
 
-  /* USER CODE END TIM3_Init 2 */
-  HAL_TIM_MspPostInit(&htim3);
+  /* USER CODE END TIM4_Init 2 */
+  HAL_TIM_MspPostInit(&htim4);
 
 }
 
@@ -286,11 +311,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(Led_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : Key_Pin */
-  GPIO_InitStruct.Pin = Key_Pin;
+  /*Configure GPIO pins : Key_Pin Sensor_Direita_Pin */
+  GPIO_InitStruct.Pin = Key_Pin|Sensor_Direita_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(Key_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : test_Pin */
   GPIO_InitStruct.Pin = test_Pin;
@@ -303,6 +328,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : Sensor_Esquerda_Pin */
+  GPIO_InitStruct.Pin = Sensor_Esquerda_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(Sensor_Esquerda_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI3_IRQn, 5, 0);
@@ -317,44 +348,80 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void RightMotorSpeed(uint8_t speed){
+	  if (speed<20)
+		  speed=20;
+
+	  if (speed>100)
+		  speed=100;
+
+	  TIM4->CCR1 = speed-1;
+	  TIM4->CCR2 = speed-1;
+ }
+
+ void LeftMotorSpeed(uint8_t speed){
+	  if (speed<20)
+		  speed=20;
+
+	  if (speed>100)
+		  speed=100;
+
+	  TIM4->CCR3 = speed-1;
+	  TIM4->CCR4 = speed-1;
+ }
+
 void RightMotorForward(){
-	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_2);
+	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_1);
 }
 
 void RightMotorBackward(){
-	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_2);
+	HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_1);
+	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_2);
 }
 
 void RightMotorStop(){
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_1);
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_2);
+	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_1);
+	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_2);
 }
 
 void LeftMotorForward(){
-	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_3);
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_4);
+	HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_3);
+	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_4);
 }
 
 void LeftMotorBackward(){
-	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_4);
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_3);
+	HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_4);
+	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_3);
 }
 
 void LeftMotorStop(){
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_3);
-	HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_4);
+	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_3);
+	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_4);
 }
+
+
+void moveFoward(){
+
+	RightEncoderCount=0;
+	LeftEncoderCount=0;
+	Flag_RightMoveFoward=true;
+	Flag_LeftMoveFoward=true;
+	RightMotorForward();
+	LeftMotorForward();
+
+}
+
 
 
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 
-	if(GPIO_Pin == GPIO_PIN_3){
-		 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-		}
 	if(GPIO_Pin == GPIO_PIN_4){
+		LeftEncoderCount++;
+		}
+	if(GPIO_Pin == GPIO_PIN_3){
+		RightEncoderCount++;
 		}
 
 }
@@ -373,38 +440,69 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-	  //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-	  LeftMotorForward();
-	  RightMotorForward();
-	  HAL_Delay(1000);
-	  //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-	  RightMotorStop();
-	  LeftMotorStop();
-	  osDelay(1000);
 
+	  if(!HAL_GPIO_ReadPin(Key_GPIO_Port, Key_Pin)){
+		  if(!Flag_RightMoveFoward && !Flag_LeftMoveFoward)
+		  	  moveFoward();
+	  }
 
+	  /*
+	  if(LeftEncoderCount>=5){
+		  LeftEncoderCount=0;
+		  HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
+	  }*/
 
-		/*
-		if(toggle>0){
-			HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
-			HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_2);
-
-			HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_3);
-			HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_4);
-		}
-		if(toggle<0){
-			HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_2);
-			HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_1);
-
-			HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_4);
-			HAL_TIM_PWM_Stop(&htim3,TIM_CHANNEL_3);
-		}*/
-
-
-    //osDelay(100);
-
+	  osDelay(10);
   }
   /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartRightMotor */
+/**
+* @brief Function implementing the RightMotor thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartRightMotor */
+void StartRightMotor(void *argument)
+{
+  /* USER CODE BEGIN StartRightMotor */
+  /* Infinite loop */
+  for(;;)
+  {
+	if(Flag_RightMoveFoward){
+		if(RightEncoderCount >=15){
+			RightMotorStop();
+			Flag_RightMoveFoward=false;
+		}
+	}
+    osDelay(1);
+  }
+  /* USER CODE END StartRightMotor */
+}
+
+/* USER CODE BEGIN Header_StartLeftMotor */
+/**
+* @brief Function implementing the LeftMotor thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartLeftMotor */
+void StartLeftMotor(void *argument)
+{
+  /* USER CODE BEGIN StartLeftMotor */
+  /* Infinite loop */
+  for(;;)
+  {
+	if(Flag_LeftMoveFoward){
+		if(LeftEncoderCount >=15){
+			LeftMotorStop();
+			Flag_LeftMoveFoward=false;
+		}
+	}
+    osDelay(1);
+  }
+  /* USER CODE END StartLeftMotor */
 }
 
 /**
