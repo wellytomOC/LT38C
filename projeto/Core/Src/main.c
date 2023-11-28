@@ -73,8 +73,16 @@ const osThreadAttr_t LeftMotor_attributes = {
 int LeftEncoderCount=0;
 int RightEncoderCount =0;
 
-bool Flag_RightMoveFoward=false;
-bool Flag_LeftMoveFoward=false;
+bool Flag_RightMotor_MoveFoward=false;
+bool Flag_LeftMotor_MoveFoward=false;
+
+bool Flag_LeftMotor_RotateRight=false;
+bool Flag_RightMotor_RotateRight=false;
+
+bool Flag_LeftMotor_RotateLeft=false;
+bool Flag_RightMotor_RotateLeft=false;
+
+int MaxPWM = 30;
 
 /* USER CODE END PV */
 
@@ -126,8 +134,11 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
-  RightMotorSpeed(30);
-  LeftMotorSpeed(30);
+
+  TIM4->CCR1 = 5;
+  TIM4->CCR2 = 5;
+  TIM4->CCR3 = 5;
+  TIM4->CCR4 = 5;
 
   /* USER CODE END 2 */
 
@@ -371,8 +382,17 @@ void RightMotorSpeed(uint8_t speed){
  }
 
 void RightMotorForward(){
-	HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_2);
-	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_1);
+
+	TIM4->CCR1 = 0;
+
+	while(TIM4->CCR2 < MaxPWM){
+		TIM4->CCR2 += 5;
+
+	}
+
+	if(TIM4->CCR2>MaxPWM)
+		TIM4->CCR2=MaxPWM;
+
 }
 
 void RightMotorBackward(){
@@ -381,14 +401,37 @@ void RightMotorBackward(){
 }
 
 void RightMotorStop(){
+
+	while(TIM4->CCR1 >= 0 || TIM4->CCR2 >=0 ){
+		TIM4->CCR1 -= 5;
+		TIM4->CCR2 -= 5;
+		osDelay(2);
+	}
+
+	if(TIM4->CCR1<0)
+		TIM4->CCR1=0;
+	if(TIM4->CCR2<0)
+		TIM4->CCR2=0;
+
+/*
 	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_1);
 	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_2);
+	*/
 }
 
 void LeftMotorForward(){
-	HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_3);
-	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_4);
+
+	TIM4->CCR4=0;
+	while(TIM4->CCR3 < MaxPWM){
+		TIM4->CCR3 += 5;
+		osDelay(2);
+	}
+
+	if(TIM4->CCR3>MaxPWM)
+		TIM4->CCR3=MaxPWM;
+
 }
+
 
 void LeftMotorBackward(){
 	HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_4);
@@ -396,8 +439,19 @@ void LeftMotorBackward(){
 }
 
 void LeftMotorStop(){
-	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_3);
-	HAL_TIM_PWM_Stop(&htim4,TIM_CHANNEL_4);
+
+
+	while(TIM4->CCR3 >= 0 || TIM4->CCR4 >= 0){
+		TIM4->CCR3 -= 5;
+		TIM4->CCR4 -= 5;
+		osDelay(2);
+	}
+
+	if(TIM4->CCR3<0)
+		TIM4->CCR3=0;
+	if(TIM4->CCR4<0)
+		TIM4->CCR4=0;
+
 }
 
 
@@ -405,10 +459,21 @@ void moveFoward(){
 
 	RightEncoderCount=0;
 	LeftEncoderCount=0;
-	Flag_RightMoveFoward=true;
-	Flag_LeftMoveFoward=true;
+	Flag_RightMotor_MoveFoward=true;
+	Flag_LeftMotor_MoveFoward=true;
 	RightMotorForward();
 	LeftMotorForward();
+
+}
+
+void RotateRight(){
+
+	RightEncoderCount=0;
+	LeftEncoderCount=0;
+
+	LeftMotorForward();
+	Flag_LeftMotor_RotateRight=true;
+	//Flag_RightMotor_RotateRight=true;
 
 }
 
@@ -442,8 +507,18 @@ void StartDefaultTask(void *argument)
   {
 
 	  if(!HAL_GPIO_ReadPin(Key_GPIO_Port, Key_Pin)){
-		  if(!Flag_RightMoveFoward && !Flag_LeftMoveFoward)
+
 		  	  moveFoward();
+		  	  while(Flag_LeftMotor_MoveFoward || Flag_RightMotor_MoveFoward);
+		  	  HAL_Delay(500);
+		  	  RotateRight();
+		  	  while(Flag_LeftMotor_RotateRight || Flag_RightMotor_RotateRight);
+		  	  HAL_Delay(500);
+			  RotateRight();
+			  while(Flag_LeftMotor_RotateRight || Flag_RightMotor_RotateRight);
+			  HAL_Delay(500);
+			  moveFoward();
+			  while(Flag_LeftMotor_MoveFoward || Flag_RightMotor_MoveFoward);
 	  }
 
 	  /*
@@ -470,12 +545,13 @@ void StartRightMotor(void *argument)
   /* Infinite loop */
   for(;;)
   {
-	if(Flag_RightMoveFoward){
+	if(Flag_RightMotor_MoveFoward){
 		if(RightEncoderCount >=15){
 			RightMotorStop();
-			Flag_RightMoveFoward=false;
+			Flag_RightMotor_MoveFoward=false;
 		}
 	}
+
     osDelay(1);
   }
   /* USER CODE END StartRightMotor */
@@ -494,10 +570,17 @@ void StartLeftMotor(void *argument)
   /* Infinite loop */
   for(;;)
   {
-	if(Flag_LeftMoveFoward){
+	if(Flag_LeftMotor_MoveFoward){
 		if(LeftEncoderCount >=15){
 			LeftMotorStop();
-			Flag_LeftMoveFoward=false;
+			Flag_LeftMotor_MoveFoward=false;
+		}
+	}
+
+	if(Flag_LeftMotor_RotateRight){
+		if(LeftEncoderCount >=10){
+			LeftMotorStop();
+			Flag_LeftMotor_RotateRight=false;
 		}
 	}
     osDelay(1);
