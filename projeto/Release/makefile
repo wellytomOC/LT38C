@@ -64,8 +64,8 @@ all: main-build
 main-build: robo.elf secondary-outputs
 
 # Tool invocations
-robo.elf robo.map: $(OBJS) $(USER_OBJS) D:\Embarcados\LT38C\robo\STM32F401CCUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "robo.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\Embarcados\LT38C\robo\STM32F401CCUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="robo.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+robo.elf robo.map: $(OBJS) $(USER_OBJS) D:\Embarcados\projeto\STM32F401CCUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "robo.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\Embarcados\projeto\STM32F401CCUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="robo.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

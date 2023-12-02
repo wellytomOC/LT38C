@@ -63,18 +63,34 @@ void Error_Handler(void);
 #define Led_GPIO_Port GPIOC
 #define Key_Pin GPIO_PIN_0
 #define Key_GPIO_Port GPIOA
-#define test_Pin GPIO_PIN_1
-#define test_GPIO_Port GPIOA
-#define Sensor_Direita_Pin GPIO_PIN_2
-#define Sensor_Direita_GPIO_Port GPIOA
+#define SensorDireitoEcho_Pin GPIO_PIN_1
+#define SensorDireitoEcho_GPIO_Port GPIOA
+#define SensorDireitoTrigger_Pin GPIO_PIN_2
+#define SensorDireitoTrigger_GPIO_Port GPIOA
 #define Encoder_Direito_Pin GPIO_PIN_3
 #define Encoder_Direito_GPIO_Port GPIOA
 #define Encoder_Direito_EXTI_IRQn EXTI3_IRQn
 #define Encoder_Esquerdo_Pin GPIO_PIN_4
 #define Encoder_Esquerdo_GPIO_Port GPIOA
 #define Encoder_Esquerdo_EXTI_IRQn EXTI4_IRQn
-#define Sensor_Esquerda_Pin GPIO_PIN_12
-#define Sensor_Esquerda_GPIO_Port GPIOB
+#define Buzzer_Pin GPIO_PIN_5
+#define Buzzer_GPIO_Port GPIOA
+#define SensorEsquerdaEcho_Pin GPIO_PIN_2
+#define SensorEsquerdaEcho_GPIO_Port GPIOB
+#define SensorEsquerdaTrigger_Pin GPIO_PIN_10
+#define SensorEsquerdaTrigger_GPIO_Port GPIOB
+#define SensorFrenteEcho_Pin GPIO_PIN_4
+#define SensorFrenteEcho_GPIO_Port GPIOB
+#define SensorFrenteTrigger_Pin GPIO_PIN_5
+#define SensorFrenteTrigger_GPIO_Port GPIOB
+#define IN1_Pin GPIO_PIN_6
+#define IN1_GPIO_Port GPIOB
+#define IN2_Pin GPIO_PIN_7
+#define IN2_GPIO_Port GPIOB
+#define IN3_Pin GPIO_PIN_8
+#define IN3_GPIO_Port GPIOB
+#define IN4_Pin GPIO_PIN_9
+#define IN4_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
