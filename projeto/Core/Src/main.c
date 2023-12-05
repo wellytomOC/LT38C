@@ -134,15 +134,19 @@ int RightEncoderCount =0;
 // flags movimentos
 bool Flag_RightMotor_Mov_Forward=false;
 bool Flag_LeftMotor_Mov_Forward=false;
+uint8_t Count_Mov_Forward = 50;
 
 bool Flag_RightMotor_Mov_Backward=false;
 bool Flag_LeftMotor_Mov_Backward=false;
+uint8_t Count_Mov_Backward = 50;
 
 bool Flag_LeftMotor_Mov_RotateRight=false;
 bool Flag_RightMotor_Mov_RotateRight=false;
+uint8_t Count_Mov_RotateRight = 52;
 
 bool Flag_LeftMotor_Mov_RotateLeft=false;
 bool Flag_RightMotor_Mov_RotateLeft=false;
+uint8_t Count_Mov_RotateLeft = 52;
 
 
 
@@ -151,7 +155,8 @@ bool Flag_RightMotor_Mov_RotateLeft=false;
 bool Baratinha=true;
 
 // PWM motores
-int MaxPWM = 30;
+uint8_t MaxPWM_Right = 30;
+uint8_t MaxPWM_Left = 30;
 
 
 
@@ -629,8 +634,33 @@ static void MX_GPIO_Init(void)
 
 
 
+// buzzer
+void PlayBuzzer(uint8_t Freq, uint8_t duration){
+	/*
+	 * 1 contagem no ARR = 10000Hz. 10 contagens = 1000Hz. 100 contagens = 100 Hz....
+	 * CCR1 = ARR/2 para ter onda quadrada
+	 */
+
+	HAL_TIM_Base_Start(&htim2);
+
+	if(Freq >5000)
+		return;
+
+	TIM2->ARR = 10000/Freq;
+	TIM2->CCR1 = 5000/Freq;
+
+	osDelay(duration);
+
+	HAL_TIM_Base_Stop(&htim2);
+
+}
+
+
+
+
+
 // display
-void printDistance(){
+void Print_Distance(){
 
 	char text[20] = {};
 
@@ -650,6 +680,22 @@ void printDistance(){
 
 	ssd1306_UpdateScreen();
 
+}
+
+Print_Encoders(){
+	char text[20] = {};
+
+	ssd1306_Fill(Black);
+
+	ssd1306_SetCursor(0, 0);
+	sprintf(text,"esq: %d", LeftEncoderCount);
+	ssd1306_WriteString(text, Font_11x18, White);
+
+	ssd1306_SetCursor(0, 20);
+	sprintf(text,"Dir: %d", RightEncoderCount);
+	ssd1306_WriteString(text, Font_11x18, White);
+
+	ssd1306_UpdateScreen();
 }
 
 
@@ -695,10 +741,10 @@ uint16_t Read_Ultrasonic(GPIO_TypeDef* TriggerPort, uint16_t TriggerPin, GPIO_Ty
 
 // controle velocidade
 void SetDefaultSpeed(){
-	TIM4->CCR1 = MaxPWM;
-	TIM4->CCR2 = MaxPWM;
-	TIM4->CCR3 = MaxPWM;
-	TIM4->CCR4 = MaxPWM;
+	TIM4->CCR1 = MaxPWM_Right;
+	TIM4->CCR2 = MaxPWM_Right;
+	TIM4->CCR3 = MaxPWM_Left;
+	TIM4->CCR4 = MaxPWM_Left;
 }
 
 void RightMotorSpeed(uint8_t speed){
@@ -842,56 +888,33 @@ void StartDefaultTask(void *argument)
 	/* Infinite loop */
 	for(;;)
 	{
-		osDelay(5000);
+
 
 		/*
-		LerSensores();
-		printDistance();
-		if(Walle.Sensor_Esquerda > 15 && Walle.Sensor_Direita > 15 && Walle.Sensor_Frente > 15)
-			HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
-
 		osDelay(1000);
 		TIM2->ARR = 20;
 		TIM2->CCR1 = 10;
 		osDelay(1000);
 		TIM2->ARR = 50;
-		TIM2->CCR1 = 25;
+		TIM2->CCR1 = 25;*/
 
+		/*
 		if(!HAL_GPIO_ReadPin(Key_GPIO_Port, Key_Pin)){
 
-			HAL_Delay(1000);
-			Mov_Forward();
-			while(Flag_LeftMotor_Mov_Forward || Flag_RightMotor_Mov_Forward){
-				HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
-			};
 			HAL_Delay(500);
-			Mov_Backward();
-			while(Flag_LeftMotor_Mov_Backward || Flag_RightMotor_Mov_Backward){
-				HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
-			};
-			HAL_Delay(500);
-			Mov_Forward();
-			while(Flag_LeftMotor_Mov_Forward || Flag_RightMotor_Mov_Forward){
-				HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
-			};
-			HAL_Delay(500);
-			Mov_RotateRight();
-			while(Flag_LeftMotor_RotateRight || Flag_RightMotor_RotateRight){
-				HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
-			};
-			HAL_Delay(500);
-			Mov_RotateRight();
-			while(Flag_LeftMotor_RotateRight || Flag_RightMotor_RotateRight){
-				HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
-			};
-			HAL_Delay(500);
-			Mov_Forward();
-			while(Flag_LeftMotor_Mov_Forward || Flag_RightMotor_Mov_Forward){
-				HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
-			};
-		}*/
 
-		osDelay(1);
+			Mov_RotateRight();
+			while(Flag_LeftMotor_Mov_RotateRight || Flag_RightMotor_Mov_RotateRight){
+				Print_Encoders();
+				osDelay(100);
+			};
+			Print_Encoders();
+
+
+		}
+
+		 */
+		osDelay(10000);
 	}
 	/* USER CODE END 5 */
 }
@@ -909,33 +932,41 @@ void StartRightMotor(void *argument)
 	/* Infinite loop */
 	for(;;)
 	{
+
 		if(Flag_RightMotor_Mov_Forward){
 
-			if(RightEncoderCount >=20 && RightEncoderCount < 25){
-				RightMotorSpeed(MaxPWM-5);
+			if(RightEncoderCount >=Count_Mov_Forward*0.8 && RightEncoderCount < Count_Mov_Forward*0.9){
+				RightMotorSpeed(MaxPWM_Right*0.75);
 			}
 
-			else if(RightEncoderCount >=25 && RightEncoderCount < 35){
-				RightMotorSpeed(MaxPWM-10);
+			else if(RightEncoderCount >=Count_Mov_Forward*0.9 && RightEncoderCount < Count_Mov_Forward){
+				RightMotorSpeed(MaxPWM_Right*0.5);
 			}
-
-			else if(RightEncoderCount >=35 && RightEncoderCount < 45){
-				RightMotorSpeed(MaxPWM-15);
-			}
-
-			if(RightEncoderCount >=100){
+			else if(RightEncoderCount >=Count_Mov_Forward){
 				RightMotorStop();
 				Flag_RightMotor_Mov_Forward=false;
-
 			}
+		}
 
+		if(Flag_RightMotor_Mov_RotateLeft){
+			if(RightEncoderCount >=Count_Mov_Forward*0.8 && RightEncoderCount < Count_Mov_Forward){
+				RightMotorSpeed(MaxPWM_Right*0.7);
+			}
+			else if(RightEncoderCount >= Count_Mov_RotateRight){
+				RightMotorStop();
+				Flag_RightMotor_Mov_RotateLeft=false;
+			}
 		}
 
 		if(Flag_RightMotor_Mov_Backward){
-			if(RightEncoderCount>=15){
+			if(RightEncoderCount>=Count_Mov_Backward){
+				RightMotorStop();
 				Flag_RightMotor_Mov_Backward = false;
 			}
 		}
+
+
+
 
 		osDelay(1);
 	}
@@ -957,35 +988,34 @@ void StartLeftMotor(void *argument)
 	{
 		if(Flag_LeftMotor_Mov_Forward){
 
-
-			if(LeftEncoderCount >=20 && LeftEncoderCount < 25){
-				LeftMotorSpeed(MaxPWM-5);
+			if(LeftEncoderCount >= Count_Mov_Forward*0.8 && LeftEncoderCount < Count_Mov_Forward*0.9){
+				LeftMotorSpeed(MaxPWM_Left*0.75);
 			}
 
-			else if(LeftEncoderCount >=25 && LeftEncoderCount < 35){
-				LeftMotorSpeed(MaxPWM-10);
+			else if(LeftEncoderCount >= Count_Mov_Forward*0.9 && LeftEncoderCount < Count_Mov_Forward){
+				LeftMotorSpeed(MaxPWM_Left*0.5);
 			}
 
-			else if(LeftEncoderCount >=35 && LeftEncoderCount < 45){
-				LeftMotorSpeed(MaxPWM-15);
-			}
-
-			if(LeftEncoderCount >=100){
+			else if(LeftEncoderCount >= Count_Mov_Forward){
 				LeftMotorStop();
 				Flag_LeftMotor_Mov_Forward=false;
 			}
 		}
 
-		if(Flag_LeftMotor_Mov_RotateRight){
-			if(LeftEncoderCount >=40){
+		if(Flag_LeftMotor_Mov_RotateRight)
+		{
+			if(LeftEncoderCount >= Count_Mov_RotateRight*0.8 && LeftEncoderCount < Count_Mov_RotateRight){
+				LeftMotorSpeed(MaxPWM_Left*0.7);
+			}
+			else if(LeftEncoderCount >= Count_Mov_RotateRight){
 				LeftMotorStop();
 				Flag_LeftMotor_Mov_RotateRight=false;
-				//HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
 			}
 		}
 
 		if(Flag_LeftMotor_Mov_Backward){
-			if(LeftEncoderCount >= 40){
+			if(LeftEncoderCount >= Count_Mov_Backward){
+				LeftMotorStop();
 				Flag_LeftMotor_Mov_Backward = false;
 			}
 		}
@@ -1032,7 +1062,18 @@ void StartStateMachine(void *argument)
 			case LeSensor:
 
 				LerSensores();
-				printDistance();
+				Print_Distance();
+
+				if(Walle.Sensor_Esquerda < 10 || Walle.Sensor_Direita < 10 || Walle.Sensor_Frente < 10){
+					Mov_Backward();
+					while(Flag_LeftMotor_Mov_Backward || Flag_RightMotor_Mov_Backward){
+						osDelay(10);
+					}
+					Mov_RotateRight();
+					while(Flag_LeftMotor_Mov_RotateRight || Flag_RightMotor_Mov_RotateRight){
+						osDelay(100);
+					}
+				}
 
 				if(Walle.Sensor_Frente > 20){
 					Barata = Frente;
@@ -1082,8 +1123,12 @@ void StartStateMachine(void *argument)
 		else{
 
 		}
+
 		osDelay(1);
+
 	}
+
+
 	/* USER CODE END StartStateMachine */
 }
 
