@@ -24,8 +24,9 @@
 /* USER CODE BEGIN Includes */
 
 #include <stdbool.h>
+#include <stdio.h>
 #include "ssd1306.h"
-
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,6 +40,7 @@ typedef enum{
 	oeste
 
 } direcoes;
+
 
 typedef enum{
 
@@ -67,9 +69,10 @@ typedef struct{
 
 	direcoes Sentido_Atual;
 	uint8_t Posicao_Atual[2];
-	uint16_t Sensor_Frente;
-	uint16_t Sensor_Esquerda;
-	uint16_t Sensor_Direita;
+	int Sensor_Frente;
+	int Sensor_Esquerda;
+	int Sensor_Direita;
+	bool Sensor_Chao;
 
 } robo;
 
@@ -78,7 +81,13 @@ typedef struct{
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-
+# define DO 528
+# define RE 592
+# define MI 665
+# define FA 704
+# define SOL 790
+# define LA 888
+# define SI 996
 
 /* USER CODE END PD */
 
@@ -124,21 +133,29 @@ const osThreadAttr_t StateMachine_attributes = {
 };
 /* USER CODE BEGIN PV */
 
+int VariacaoSensor = 10;
+uint16_t MediaSensorD[10];
+uint16_t MediaSensorE[10];
+uint16_t MediaSensorF[10];
 
 // encoders
 int LeftEncoderCount=0;
 int RightEncoderCount =0;
 
 
+long LeftEncoderCountTotal = 0;
+long RightEncoderCountTotal = 0;
+float k;
+float y;
 
 // flags movimentos
 bool Flag_RightMotor_Mov_Forward=false;
 bool Flag_LeftMotor_Mov_Forward=false;
-uint8_t Count_Mov_Forward = 50;
+uint8_t Count_Mov_Forward = 35;
 
 bool Flag_RightMotor_Mov_Backward=false;
 bool Flag_LeftMotor_Mov_Backward=false;
-uint8_t Count_Mov_Backward = 50;
+uint8_t Count_Mov_Backward = 35;
 
 bool Flag_LeftMotor_Mov_RotateRight=false;
 bool Flag_RightMotor_Mov_RotateRight=false;
@@ -150,23 +167,38 @@ uint8_t Count_Mov_RotateLeft = 52;
 
 
 
-
 // demais flags
 bool Baratinha=true;
+bool Flag_EncoderOrDistance = true;
+bool achou = false;
 
 // PWM motores
-uint8_t MaxPWM_Right = 30;
-uint8_t MaxPWM_Left = 30;
+uint8_t MaxPWM_Right = 35;
+uint8_t MaxPWM_Left = 32;
 
+//Distancia para tomada de ação
+uint16_t MaxDistanciaLeituraSensorSonico = 250; // centimentros
+uint16_t DistanciaMinima = 15;
 
-
+//Sensor anterior
+int SensorFrenteAnterior = 0;
+int SensorEsquerdaAnterior = 0;
+int SensorDireitaAnterior = 0;
 
 // structs e enums
 robo Walle = { .Sentido_Atual = norte, .Posicao_Atual = {0,0} };
 BarataTonta Barata = AguardaBotao;
 BlindSearch BS = WaitingButton;
 
+//timeouts
+uint16_t Timeout=1000;
+uint16_t ContadorRotateRigt=5;
+//uint16_t TimeOutMotorDireito=10000;
 
+//contagem
+int ContagemRegressiva = 5;
+int ContagemRotate = 0;
+bool FlagInicial = true;
 
 /* USER CODE END PV */
 
@@ -228,8 +260,6 @@ int main(void)
 	/* USER CODE BEGIN 2 */
 
 
-
-
 	//inicializacao do display
 	ssd1306_Init();
 	ssd1306_Fill(White);
@@ -241,9 +271,6 @@ int main(void)
 	HAL_GPIO_WritePin(SensorFrenteTrigger_GPIO_Port, SensorFrenteTrigger_Pin , GPIO_PIN_RESET);  // pull the TRIG pin low
 	HAL_GPIO_WritePin(SensorEsquerdaTrigger_GPIO_Port, SensorEsquerdaTrigger_Pin , GPIO_PIN_RESET);  // pull the TRIG pin low
 	HAL_GPIO_WritePin(SensorDireitoTrigger_GPIO_Port, SensorDireitoTrigger_Pin , GPIO_PIN_RESET);  // pull the TRIG pin low
-
-
-
 
 
 
@@ -295,6 +322,9 @@ int main(void)
 	/* We should never get here as control is now taken by the scheduler */
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
+	Walle.Sensor_Frente = 0;
+	Walle.Sensor_Direita = 0;
+	Walle.Sensor_Esquerda = 0;
 	while (1)
 	{
 		/* USER CODE END WHILE */
@@ -396,7 +426,6 @@ static void MX_TIM2_Init(void)
 
 	/* USER CODE END TIM2_Init 0 */
 
-	TIM_ClockConfigTypeDef sClockSourceConfig = {0};
 	TIM_MasterConfigTypeDef sMasterConfig = {0};
 	TIM_OC_InitTypeDef sConfigOC = {0};
 
@@ -409,15 +438,6 @@ static void MX_TIM2_Init(void)
 	htim2.Init.Period = 10;
 	htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-	if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-	{
-		Error_Handler();
-	}
-	sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-	if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-	{
-		Error_Handler();
-	}
 	if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
 	{
 		Error_Handler();
@@ -587,8 +607,8 @@ static void MX_GPIO_Init(void)
 	GPIO_InitStruct.Pull = GPIO_PULLUP;
 	HAL_GPIO_Init(Key_GPIO_Port, &GPIO_InitStruct);
 
-	/*Configure GPIO pins : SensorDireitoEcho_Pin SensorFrenteEcho_Pin */
-	GPIO_InitStruct.Pin = SensorDireitoEcho_Pin|SensorFrenteEcho_Pin;
+	/*Configure GPIO pins : SensorDireitoEcho_Pin SensorFrenteEcho_Pin SensorChaoTras_Pin */
+	GPIO_InitStruct.Pin = SensorDireitoEcho_Pin|SensorFrenteEcho_Pin|SensorChaoTras_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -606,6 +626,12 @@ static void MX_GPIO_Init(void)
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+	/*Configure GPIO pin : SensorChao_Pin */
+	GPIO_InitStruct.Pin = SensorChao_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(SensorChao_GPIO_Port, &GPIO_InitStruct);
+
 	/*Configure GPIO pin : SensorEsquerdaEcho_Pin */
 	GPIO_InitStruct.Pin = SensorEsquerdaEcho_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -620,6 +646,9 @@ static void MX_GPIO_Init(void)
 	HAL_GPIO_Init(SensorEsquerdaTrigger_GPIO_Port, &GPIO_InitStruct);
 
 	/* EXTI interrupt init*/
+	HAL_NVIC_SetPriority(EXTI0_IRQn, 5, 0);
+	HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
 	HAL_NVIC_SetPriority(EXTI3_IRQn, 5, 0);
 	HAL_NVIC_EnableIRQ(EXTI3_IRQn);
 
@@ -635,13 +664,14 @@ static void MX_GPIO_Init(void)
 
 
 // buzzer
-void PlayBuzzer(uint8_t Freq, uint8_t duration){
+void PlayBuzzer(int Freq, int duration){
 	/*
 	 * 1 contagem no ARR = 10000Hz. 10 contagens = 1000Hz. 100 contagens = 100 Hz....
 	 * CCR1 = ARR/2 para ter onda quadrada
 	 */
-
-	HAL_TIM_Base_Start(&htim2);
+	TIM2->ARR = 10000/Freq;
+	TIM2->CCR1 = 5000/Freq;
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
 	if(Freq >5000)
 		return;
@@ -651,26 +681,223 @@ void PlayBuzzer(uint8_t Freq, uint8_t duration){
 
 	osDelay(duration);
 
-	HAL_TIM_Base_Stop(&htim2);
+	HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_1);
 
+}
+
+void Printa1segTela(){
+	char text[20] = {};
+	ssd1306_SetCursor(56,25);
+	sprintf(text,"%d",ContagemRegressiva--);
+
+	if(FlagInicial){
+		ssd1306_Fill(White);
+		ssd1306_WriteString(text, Font_16x26, Black);
+		FlagInicial = false;
+	}
+	else{
+		ssd1306_Fill(Black);
+		ssd1306_WriteString(text, Font_16x26, White);
+		FlagInicial = true;
+	}
+
+	ssd1306_UpdateScreen();
+
+}
+
+void Buzzer5seg(){
+	Printa1segTela();
+	PlayBuzzer(500, 500);
+	osDelay(500);
+	Printa1segTela();
+	PlayBuzzer(500, 500);
+	osDelay(500);
+	Printa1segTela();
+	PlayBuzzer(500, 500);
+	osDelay(500);
+	Printa1segTela();
+	PlayBuzzer(500, 500);
+	osDelay(500);
+	Printa1segTela();
+	PlayBuzzer(500, 500);
+	osDelay(500);
+}
+
+void BuzzerTocaMusica(){
+	PlayBuzzer(MI, 200);
+	osDelay(25);
+	PlayBuzzer(MI, 200);
+	osDelay(25);
+	PlayBuzzer(RE, 1000);
+	osDelay(200);
+	PlayBuzzer(RE, 200);
+	osDelay(25);
+	PlayBuzzer(RE, 200);
+	osDelay(25);
+	PlayBuzzer(DO, 1000);
+	osDelay(200);
+}
+void Buzzer_InitialSong()
+{
+	Buzzer1seg();
+	Buzzer1seg();
+	Buzzer1seg();
+	Buzzer1seg();
+	Buzzer1seg();
 }
 
 
 
+void Buzzer_FinishSong()
+{
+	PlayBuzzer(200, 100);
+	osDelay(10);
+	PlayBuzzer(500, 100);
+	osDelay(10);
+	PlayBuzzer(1000, 150);
+	osDelay(500);
+	PlayBuzzer(1000, 1000);
+}
+
 
 
 // display
+
+
+void Print_Ajustando(){
+	char text[20] = {};
+
+	ssd1306_Fill(Black);
+
+	ssd1306_SetCursor(0,0);
+	strcpy(text,"Modo 'Achou'");
+	ssd1306_WriteString(text, Font_7x10, White);
+
+	ssd1306_SetCursor(0,20);
+	strcpy(text,"Ajustando...");
+	ssd1306_WriteString(text, Font_11x18, White);
+
+	ssd1306_UpdateScreen();
+}
+
+void Print_Achou(){
+
+	char text[20] = {};
+	ssd1306_Fill(Black);
+
+
+	ssd1306_SetCursor(0,15);
+	strcpy(text,"Achou");
+	ssd1306_WriteString(text, Font_11x18, White);
+
+	ssd1306_SetCursor(0,30);
+	strcpy(text," o ");
+	ssd1306_WriteString(text, Font_11x18, White);
+
+
+	ssd1306_SetCursor(0,45);
+	strcpy(text,"objetivo!");
+	ssd1306_WriteString(text, Font_11x18, White);
+
+
+	ssd1306_UpdateScreen();
+}
+
+
+void Print_Direcao(){
+	char text[20] = {};
+
+	ssd1306_Fill(Black);
+
+	if(Walle.Sensor_Frente<SensorFrenteAnterior && (SensorFrenteAnterior-Walle.Sensor_Frente)>VariacaoSensor){
+		ssd1306_SetCursor(0,0);
+		strcpy(text,"Frente");
+		ssd1306_WriteString(text, Font_7x10, White);
+	}
+	/*else{
+		ssd1306_SetCursor(0,0);
+		sprintf(text,"nao Frente %d",SensorFrenteAnterior);
+		ssd1306_WriteString(text, Font_7x10, White);
+	}*/
+
+
+	if(Walle.Sensor_Frente>SensorFrenteAnterior && (Walle.Sensor_Frente-SensorFrenteAnterior)>VariacaoSensor ){
+		ssd1306_SetCursor(0,15);
+		strcpy(text,"Tras");
+		ssd1306_WriteString(text, Font_7x10, White);
+	}
+	/*else {
+		ssd1306_SetCursor(0,15);
+		sprintf(text,"nao Frente %d",Walle.Sensor_Frente);
+		ssd1306_WriteString(text, Font_7x10, White);
+	}*/
+
+	if(Walle.Sensor_Esquerda > SensorEsquerdaAnterior && (Walle.Sensor_Esquerda - SensorEsquerdaAnterior)>VariacaoSensor){
+		ssd1306_SetCursor(0,30);
+		strcpy(text,"Esquerda");
+		ssd1306_WriteString(text, Font_7x10, White);
+	}
+	/*else {
+		ssd1306_SetCursor(0,30);
+		strcpy(text,"nao Esquerda");
+		ssd1306_WriteString(text, Font_7x10, White);
+	}*/
+
+	if(Walle.Sensor_Direita > SensorDireitaAnterior && (Walle.Sensor_Direita - SensorDireitaAnterior)>VariacaoSensor){
+		ssd1306_SetCursor(0,45);
+		strcpy(text,"Direita");
+		ssd1306_WriteString(text, Font_7x10, White);
+	}
+	/*else{
+		ssd1306_SetCursor(0,45);
+		strcpy(text,"nao Direita");
+		ssd1306_WriteString(text, Font_7x10, White);
+	}*/
+
+
+	ssd1306_UpdateScreen();
+}
+
+
+void Print_Espera(){
+	char text[20] = {};
+
+	ssd1306_Fill(Black);
+
+	ssd1306_SetCursor(0,0);
+	strcpy(text,"Modo de Espera");
+	ssd1306_WriteString(text, Font_7x10, White);
+
+	ssd1306_SetCursor(0,15);
+	strcpy(text,"Clique no botao");
+	ssd1306_WriteString(text, Font_7x10, White);
+
+	ssd1306_SetCursor(0,30);
+	strcpy(text,"'Key' --->");
+	ssd1306_WriteString(text, Font_7x10, White);
+
+	ssd1306_SetCursor(0,45);
+	strcpy(text,"Para comecar");
+	ssd1306_WriteString(text, Font_7x10, White);
+
+	ssd1306_UpdateScreen();
+}
+
 void Print_Distance(){
 
 	char text[20] = {};
 
 	ssd1306_Fill(Black);
 
-	ssd1306_SetCursor(0, 0);
+	ssd1306_SetCursor(0,0);
+	strcpy(text,"Modo Competicao");
+	ssd1306_WriteString(text, Font_6x8, White);
+
+	ssd1306_SetCursor(0, 10);
 	sprintf(text,"esq: %d", Walle.Sensor_Esquerda);
 	ssd1306_WriteString(text, Font_11x18, White);
 
-	ssd1306_SetCursor(0, 20);
+	ssd1306_SetCursor(0, 25);
 	sprintf(text,"Dir: %d", Walle.Sensor_Direita);
 	ssd1306_WriteString(text, Font_11x18, White);
 
@@ -682,31 +909,105 @@ void Print_Distance(){
 
 }
 
-Print_Encoders(){
+void Print_Encoders(){
 	char text[20] = {};
 
 	ssd1306_Fill(Black);
+	k = LeftEncoderCountTotal;
+	y = RightEncoderCountTotal;
+
+	if(y == 0){
+		k=k/1;
+	}
+	else{
+		k=k/y;
+	}
+	/*ssd1306_SetCursor(0, 0);
+	sprintf(text,"K: %.3f",k);
+	ssd1306_WriteString(text, Font_11x18, White);*/
 
 	ssd1306_SetCursor(0, 0);
-	sprintf(text,"esq: %d", LeftEncoderCount);
+	sprintf(text,"Esq: %d", LeftEncoderCount);
 	ssd1306_WriteString(text, Font_11x18, White);
 
-	ssd1306_SetCursor(0, 20);
+	ssd1306_SetCursor(0, 15);
 	sprintf(text,"Dir: %d", RightEncoderCount);
 	ssd1306_WriteString(text, Font_11x18, White);
 
-	ssd1306_UpdateScreen();
-}
+	ssd1306_SetCursor(0, 30);
+	sprintf(text,"Esq T: %ld", LeftEncoderCountTotal);
+	ssd1306_WriteString(text, Font_11x18, White);
 
+	ssd1306_SetCursor(0, 45);
+	sprintf(text,"Dir T: %ld", RightEncoderCountTotal);
+	ssd1306_WriteString(text, Font_11x18, White);
+
+	ssd1306_UpdateScreen();
+
+}
 
 
 
 // sensores
 void LerSensores(){
-
+	SensorDireitaAnterior = Walle.Sensor_Direita ;
+	SensorEsquerdaAnterior = Walle.Sensor_Esquerda;
+	SensorFrenteAnterior = Walle.Sensor_Frente;
+	/*do{
 	Walle.Sensor_Direita = Read_Ultrasonic(SensorDireitoTrigger_GPIO_Port, SensorDireitoTrigger_Pin, SensorDireitoEcho_GPIO_Port, SensorDireitoEcho_Pin);
 	Walle.Sensor_Esquerda = Read_Ultrasonic(SensorEsquerdaTrigger_GPIO_Port, SensorEsquerdaTrigger_Pin, SensorEsquerdaEcho_GPIO_Port, SensorEsquerdaEcho_Pin);
 	Walle.Sensor_Frente = Read_Ultrasonic(SensorFrenteTrigger_GPIO_Port, SensorFrenteTrigger_Pin, SensorFrenteEcho_GPIO_Port, SensorFrenteEcho_Pin);
+	}while(Walle.Sensor_Direita > MaxDistanciaLeituraSensorSonico || Walle.Sensor_Esquerda > MaxDistanciaLeituraSensorSonico || Walle.Sensor_Frente > MaxDistanciaLeituraSensorSonico );
+	 */
+	for(int i = 0; i<=9;i++){
+		MediaSensorD[i] = Read_Ultrasonic(SensorDireitoTrigger_GPIO_Port, SensorDireitoTrigger_Pin, SensorDireitoEcho_GPIO_Port, SensorDireitoEcho_Pin);
+		MediaSensorE[i] = Read_Ultrasonic(SensorEsquerdaTrigger_GPIO_Port, SensorEsquerdaTrigger_Pin, SensorEsquerdaEcho_GPIO_Port, SensorEsquerdaEcho_Pin);
+		MediaSensorF[i] = Read_Ultrasonic(SensorFrenteTrigger_GPIO_Port, SensorFrenteTrigger_Pin, SensorFrenteEcho_GPIO_Port, SensorFrenteEcho_Pin);
+	}
+
+	for(int i = 0; i<=9;i++){
+		if(MediaSensorD[i]>MaxDistanciaLeituraSensorSonico && i>0){
+			MediaSensorD[i] = MediaSensorD[i-1];
+		}
+		if(MediaSensorE[i]>MaxDistanciaLeituraSensorSonico && i>0){
+			MediaSensorE[i] = MediaSensorE[i-1];
+		}
+		if(MediaSensorF[i]>MaxDistanciaLeituraSensorSonico && i>0){
+			MediaSensorF[i] = MediaSensorF[i-1];
+		}
+		int SomaD = 0;
+		int SomaE = 0;
+		int SomaF = 0;
+		for(int i = 0; i<=9;i++){
+			SomaD+=MediaSensorD[i];
+			SomaE+=MediaSensorE[i];
+			SomaF+=MediaSensorF[i];
+		}
+
+		Walle.Sensor_Direita = SomaD/10;
+		Walle.Sensor_Esquerda = SomaE/10;
+		Walle.Sensor_Frente = SomaF/10;
+	}
+
+
+	/*SensorDireitaAnterior = Walle.Sensor_Direita;
+	SensorEsquerdaAnterior = Walle.Sensor_Esquerda;
+	SensorFrenteAnterior = Walle.Sensor_Frente;
+	Walle.Sensor_Direita = Read_Ultrasonic(SensorDireitoTrigger_GPIO_Port, SensorDireitoTrigger_Pin, SensorDireitoEcho_GPIO_Port, SensorDireitoEcho_Pin);
+	Walle.Sensor_Esquerda = Read_Ultrasonic(SensorEsquerdaTrigger_GPIO_Port, SensorEsquerdaTrigger_Pin, SensorEsquerdaEcho_GPIO_Port, SensorEsquerdaEcho_Pin);
+	Walle.Sensor_Frente = Read_Ultrasonic(SensorFrenteTrigger_GPIO_Port, SensorFrenteTrigger_Pin, SensorFrenteEcho_GPIO_Port, SensorFrenteEcho_Pin);
+	Walle.Sensor_Chao=HAL_GPIO_ReadPin(SensorChao_GPIO_Port, SensorChao_Pin);
+
+	if(Walle.Sensor_Direita > MaxDistanciaLeituraSensorSonico){
+		Walle.Sensor_Direita = SensorDireitaAnterior;
+	}
+	if(Walle.Sensor_Esquerda > MaxDistanciaLeituraSensorSonico){
+			Walle.Sensor_Esquerda = SensorEsquerdaAnterior;
+		}
+	if(Walle.Sensor_Frente > MaxDistanciaLeituraSensorSonico){
+			Walle.Sensor_Frente = SensorFrenteAnterior;
+		}*/
+
 
 }
 
@@ -817,7 +1118,7 @@ void LeftMotorStop(){
 
 // movimentos
 void Mov_Forward(){
-
+	uint16_t i = 0;
 	RightEncoderCount=0;
 	LeftEncoderCount=0;
 
@@ -829,9 +1130,17 @@ void Mov_Forward(){
 	RightMotorForward();
 	LeftMotorForward();
 
+	while(Flag_RightMotor_Mov_Forward || Flag_LeftMotor_Mov_Forward){
+		osDelay(10);
+		i++;
+		if(i>= Timeout)
+			break;
+	}
+
 }
 
 void Mov_Backward(){
+	uint16_t i = 0;
 	RightEncoderCount=0;
 	LeftEncoderCount=0;
 
@@ -842,20 +1151,48 @@ void Mov_Backward(){
 
 	RightMotorBackward();
 	LeftMotorBackward();
+
+	while(Flag_LeftMotor_Mov_Backward || Flag_RightMotor_Mov_Backward){
+		osDelay(10);
+		i++;
+		if(i>= Timeout)
+			break;
+	}
 }
 
 void Mov_RotateRight(){
-
+	uint16_t i = 0;
 	RightEncoderCount=0;
 	LeftEncoderCount=0;
 
 	Flag_LeftMotor_Mov_RotateRight=true;
-
 	SetDefaultSpeed();
-
 	LeftMotorForward();
 
+	while(Flag_LeftMotor_Mov_RotateRight){
+		osDelay(10);
+		i++;
+		if(i>= Timeout)
+			break;
+	}
 
+}
+
+void Mov_RotateLeft(){
+	uint16_t i = 0;
+	RightEncoderCount=0;
+	LeftEncoderCount=0;
+
+	Flag_RightMotor_Mov_RotateLeft=true;
+	SetDefaultSpeed();
+	RightMotorForward();
+
+	while(Flag_RightMotor_Mov_RotateLeft){
+		osDelay(10);
+		i++;
+		if(i>= Timeout)
+			break;
+	}
 }
 
 
@@ -865,9 +1202,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 
 	if(GPIO_Pin == GPIO_PIN_4){
 		LeftEncoderCount++;
+		LeftEncoderCountTotal++;
 	}
 	if(GPIO_Pin == GPIO_PIN_3){
 		RightEncoderCount++;
+		RightEncoderCountTotal++;
+	}
+	if(GPIO_Pin == SensorChao_Pin){
+		if(Barata != AguardaBotao)
+			Baratinha=false;
 	}
 
 }
@@ -934,14 +1277,25 @@ void StartRightMotor(void *argument)
 	{
 
 		if(Flag_RightMotor_Mov_Forward){
+			if(RightEncoderCount >=Count_Mov_Forward*0 && RightEncoderCount < Count_Mov_Forward*0.1){
+				RightMotorSpeed(MaxPWM_Right*0.8);
+			}
 
-			if(RightEncoderCount >=Count_Mov_Forward*0.8 && RightEncoderCount < Count_Mov_Forward*0.9){
-				RightMotorSpeed(MaxPWM_Right*0.75);
+			else if(RightEncoderCount >=Count_Mov_Forward*0.1 && RightEncoderCount < Count_Mov_Forward*0.2){
+				RightMotorSpeed(MaxPWM_Right*1);
+			}
+
+
+
+			else if(RightEncoderCount >=Count_Mov_Forward*0.8 && RightEncoderCount < Count_Mov_Forward*0.9){
+				RightMotorSpeed(MaxPWM_Right*0.85);
 			}
 
 			else if(RightEncoderCount >=Count_Mov_Forward*0.9 && RightEncoderCount < Count_Mov_Forward){
-				RightMotorSpeed(MaxPWM_Right*0.5);
+				RightMotorSpeed(MaxPWM_Right*0.7);
 			}
+
+
 			else if(RightEncoderCount >=Count_Mov_Forward){
 				RightMotorStop();
 				Flag_RightMotor_Mov_Forward=false;
@@ -949,10 +1303,10 @@ void StartRightMotor(void *argument)
 		}
 
 		if(Flag_RightMotor_Mov_RotateLeft){
-			if(RightEncoderCount >=Count_Mov_Forward*0.8 && RightEncoderCount < Count_Mov_Forward){
+			/*if(RightEncoderCount >=Count_Mov_Forward*0.8 && RightEncoderCount < Count_Mov_Forward){
 				RightMotorSpeed(MaxPWM_Right*0.7);
-			}
-			else if(RightEncoderCount >= Count_Mov_RotateRight){
+			}*/
+			if(RightEncoderCount >= Count_Mov_RotateRight){
 				RightMotorStop();
 				Flag_RightMotor_Mov_RotateLeft=false;
 			}
@@ -988,13 +1342,24 @@ void StartLeftMotor(void *argument)
 	{
 		if(Flag_LeftMotor_Mov_Forward){
 
-			if(LeftEncoderCount >= Count_Mov_Forward*0.8 && LeftEncoderCount < Count_Mov_Forward*0.9){
-				LeftMotorSpeed(MaxPWM_Left*0.75);
+			if(LeftEncoderCount >= Count_Mov_Forward*0 && LeftEncoderCount < Count_Mov_Forward*0.1){
+				LeftMotorSpeed(MaxPWM_Left*0.8);
+			}
+
+			else if(LeftEncoderCount >= Count_Mov_Forward*0.1 && LeftEncoderCount < Count_Mov_Forward*0.2){
+				LeftMotorSpeed(MaxPWM_Left*1);
+			}
+
+
+			else if(LeftEncoderCount >= Count_Mov_Forward*0.8 && LeftEncoderCount < Count_Mov_Forward*0.9){
+				LeftMotorSpeed(MaxPWM_Left*0.85);
 			}
 
 			else if(LeftEncoderCount >= Count_Mov_Forward*0.9 && LeftEncoderCount < Count_Mov_Forward){
-				LeftMotorSpeed(MaxPWM_Left*0.5);
+				LeftMotorSpeed(MaxPWM_Left*0.7);
 			}
+
+
 
 			else if(LeftEncoderCount >= Count_Mov_Forward){
 				LeftMotorStop();
@@ -1004,14 +1369,15 @@ void StartLeftMotor(void *argument)
 
 		if(Flag_LeftMotor_Mov_RotateRight)
 		{
-			if(LeftEncoderCount >= Count_Mov_RotateRight*0.8 && LeftEncoderCount < Count_Mov_RotateRight){
+			/*if(LeftEncoderCount >= Count_Mov_RotateRight*0.8 && LeftEncoderCount < Count_Mov_RotateRight){
 				LeftMotorSpeed(MaxPWM_Left*0.7);
-			}
-			else if(LeftEncoderCount >= Count_Mov_RotateRight){
+			}*/
+			if(LeftEncoderCount >= Count_Mov_RotateRight){
 				LeftMotorStop();
 				Flag_LeftMotor_Mov_RotateRight=false;
 			}
 		}
+
 
 		if(Flag_LeftMotor_Mov_Backward){
 			if(LeftEncoderCount >= Count_Mov_Backward){
@@ -1035,6 +1401,7 @@ void StartStateMachine(void *argument)
 {
 	/* USER CODE BEGIN StartStateMachine */
 	/* Infinite loop */
+	Print_Espera();
 	for(;;)
 	{
 
@@ -1043,84 +1410,111 @@ void StartStateMachine(void *argument)
 			switch (Barata) {
 
 			case AguardaBotao:
-
 				if(!HAL_GPIO_ReadPin(Key_GPIO_Port, Key_Pin)){
-					osDelay(500);
+					Buzzer5seg();
 					Barata = LeSensor;
 				}
 
 				break;
-			case Frente:
 
-				Mov_Forward();
-				while(Flag_LeftMotor_Mov_Forward || Flag_RightMotor_Mov_Forward){
-					osDelay(100);
-				}
-				Barata = LeSensor;
-
-				break;
 			case LeSensor:
-
 				LerSensores();
-				Print_Distance();
+				if(!HAL_GPIO_ReadPin(Key_GPIO_Port, Key_Pin)){
 
-				if(Walle.Sensor_Esquerda < 10 || Walle.Sensor_Direita < 10 || Walle.Sensor_Frente < 10){
-					Mov_Backward();
-					while(Flag_LeftMotor_Mov_Backward || Flag_RightMotor_Mov_Backward){
-						osDelay(10);
-					}
-					Mov_RotateRight();
-					while(Flag_LeftMotor_Mov_RotateRight || Flag_RightMotor_Mov_RotateRight){
-						osDelay(100);
-					}
+					if(Flag_EncoderOrDistance){
+						Flag_EncoderOrDistance = false;}
+					else{
+						Flag_EncoderOrDistance = true;}
 				}
+				if(Flag_EncoderOrDistance){
+					Print_Distance();
+				}
+				else{
+					Print_Direcao();}
 
-				if(Walle.Sensor_Frente > 20){
+				HAL_GPIO_TogglePin(Led_GPIO_Port, Led_Pin);
+				if (Walle.Sensor_Frente < 8 || Walle.Sensor_Direita < 8 || Walle.Sensor_Esquerda < 8){
+					Mov_Backward(); //se a contagem de ticks do sistema for par, vira para direita, se não para a esquerda
+					if(HAL_GetTick()%2 == 0) Mov_RotateRight();
+					else Mov_RotateLeft();
+				}
+				else if(Walle.Sensor_Frente > DistanciaMinima && Walle.Sensor_Direita > DistanciaMinima && Walle.Sensor_Esquerda > DistanciaMinima){
 					Barata = Frente;
 				}
-				else if(Walle.Sensor_Direita > 20){
+				else if(Walle.Sensor_Direita > DistanciaMinima){
 					Barata = ViraDireita;
 				}
-				else if(Walle.Sensor_Esquerda > 20){
+				else if(Walle.Sensor_Esquerda > DistanciaMinima){
 					Barata = ViraEsquerda;
 				}
 				else{
-					Barata = AguardaBotao;
+
+					Mov_Backward(); //se a contagem de ticks do sistema for par, vira para direita, se não para a esquerda
+					if(HAL_GetTick()%2 == 0) Mov_RotateRight();
+					else Mov_RotateLeft();
 				}
+
+				break;
+
+			case Frente:
+				Mov_Forward();
+				Barata = LeSensor;
 
 				break;
 
 			case ViraDireita:
-
 				Mov_RotateRight();
-				while(Flag_LeftMotor_Mov_RotateRight || Flag_RightMotor_Mov_RotateRight){
-					osDelay(100);
-				}
 				Barata = LeSensor;
 
 
 				break;
+
 			case ViraEsquerda:
-
-				Mov_RotateRight();
-				while(Flag_LeftMotor_Mov_RotateRight || Flag_RightMotor_Mov_RotateRight){
-					osDelay(100);
-				}
+				Mov_RotateLeft();
 				Barata = LeSensor;
 
 				break;
-			case Achou:
 
-				Barata = AguardaBotao;
-
-				break;
 			default:
 				break;
 			}
 		}
 
-		// modo BlindSearch
+		// Achou
 		else{
+
+			if(!achou){
+				Print_Ajustando();
+				if(HAL_GPIO_ReadPin(SensorChaoTras_GPIO_Port, SensorChaoTras_Pin) && HAL_GPIO_ReadPin(SensorChao_GPIO_Port, SensorChao_Pin) ){
+					achou = true;
+				}
+				else if(HAL_GPIO_ReadPin(SensorChaoTras_GPIO_Port, SensorChaoTras_Pin) && !HAL_GPIO_ReadPin(SensorChao_GPIO_Port, SensorChao_Pin)){
+					Mov_Backward();
+				}
+				else if(!HAL_GPIO_ReadPin(SensorChaoTras_GPIO_Port, SensorChaoTras_Pin) && HAL_GPIO_ReadPin(SensorChao_GPIO_Port, SensorChao_Pin)){
+					Mov_RotateRight();
+				}
+				else if(!HAL_GPIO_ReadPin(SensorChaoTras_GPIO_Port, SensorChaoTras_Pin) && !HAL_GPIO_ReadPin(SensorChao_GPIO_Port, SensorChao_Pin)){
+					Mov_RotateRight();
+					osDelay(100);
+					ContadorRotateRigt--;
+					if(ContadorRotateRigt<=0){
+						ContadorRotateRigt=5;
+						Baratinha=true;
+					}
+				}
+
+
+
+			}
+			else{
+				Print_Achou();
+				BuzzerTocaMusica();
+				BuzzerTocaMusica();
+				osDelay(1000);
+				osDelay(1000);
+			}
+
 
 		}
 

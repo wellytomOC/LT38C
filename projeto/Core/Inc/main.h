@@ -79,10 +79,15 @@ void Error_Handler(void);
 #define SensorFrenteTrigger_GPIO_Port GPIOA
 #define SensorFrenteEcho_Pin GPIO_PIN_7
 #define SensorFrenteEcho_GPIO_Port GPIOA
+#define SensorChao_Pin GPIO_PIN_0
+#define SensorChao_GPIO_Port GPIOB
+#define SensorChao_EXTI_IRQn EXTI0_IRQn
 #define SensorEsquerdaEcho_Pin GPIO_PIN_2
 #define SensorEsquerdaEcho_GPIO_Port GPIOB
 #define SensorEsquerdaTrigger_Pin GPIO_PIN_10
 #define SensorEsquerdaTrigger_GPIO_Port GPIOB
+#define SensorChaoTras_Pin GPIO_PIN_9
+#define SensorChaoTras_GPIO_Port GPIOA
 #define IN1_Pin GPIO_PIN_6
 #define IN1_GPIO_Port GPIOB
 #define IN2_Pin GPIO_PIN_7
